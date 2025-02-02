@@ -26,7 +26,7 @@ var IV = {
 			}
 			target = target.parentNode;
 		}
-		if (!target || !target.hasAttribute('href')) {
+		if (!target || (context === '' && !target.hasAttribute('href'))) {
 			return;
 		}
 		var base = document.createElement('A');
@@ -42,7 +42,7 @@ var IV = {
 		} else if (target.hash.length < 2) {
 			IV.jumpToHash('');
 		} else {
-			IV.jumpToHash(target.hash.substr(1));
+			IV.jumpToHash(decodeURIComponent(target.hash.substr(1)));
 		}
 		e.preventDefault();
 	},
@@ -72,6 +72,9 @@ var IV = {
 		}
 	},
 	frameKeyDown: function (e) {
+		const key0 = (e.key === '0')
+			|| (e.code === 'Key0')
+			|| (e.keyCode === 48);
 		const keyW = (e.key === 'w')
 			|| (e.code === 'KeyW')
 			|| (e.keyCode === 87);
@@ -81,12 +84,12 @@ var IV = {
 		const keyM = (e.key === 'm')
 			|| (e.code === 'KeyM')
 			|| (e.keyCode === 77);
-		if ((e.metaKey || e.ctrlKey) && (keyW || keyQ || keyM)) {
+		if ((e.metaKey || e.ctrlKey) && (keyW || keyQ || keyM || key0)) {
 			e.preventDefault();
 			IV.notify({
 				event: 'keydown',
 				modifier: e.ctrlKey ? 'ctrl' : 'cmd',
-				key: keyW ? 'w' : keyQ ? 'q' : 'm',
+				key: key0 ? '0' : keyW ? 'w' : keyQ ? 'q' : 'm',
 			});
 		} else if (e.key === 'Escape' || e.keyCode === 27) {
 			e.preventDefault();
@@ -149,7 +152,6 @@ var IV = {
 			var s = form.s;
 			const next = +s.value + delta;
 			s.value = (next == s.length) ? 0 : (next == -1) ? (s.length - 1) : next;
-			s.forEach(function(el){ el.checked && el.parentNode.scrollIntoView && el.parentNode.scrollIntoView({behavior: 'smooth', block: 'center', inline: 'center'}); });
 			form.nextSibling.firstChild.style[marginProp] = (-100 * s.value) + '%';
 		} else {
 			el.form.nextSibling.firstChild.style[marginProp] = (-100 * el.value) + '%';
@@ -414,9 +416,12 @@ var IV = {
 		var article = function (el) {
 			return el.getElementsByTagName('article')[0];
 		};
-		var from = article(IV.findPageScroll());
-		var to = article(IV.makeScrolledContent(data.html));
-		morphdom(from, to, {
+		var footer = function (el) {
+			return el.getElementsByClassName('page-footer')[0];
+		};
+		var from = IV.findPageScroll();
+		var to = IV.makeScrolledContent(data.html);
+		morphdom(article(from), article(to), {
 			onBeforeElUpdated: function (fromEl, toEl) {
 				if (fromEl.classList.contains('video')
 					&& toEl.classList.contains('video')
@@ -440,6 +445,7 @@ var IV = {
 				return !fromEl.isEqualNode(toEl);
 			}
 		});
+		morphdom(footer(from), footer(to));
 		IV.initMedia();
 		eval(data.js);
 	},
@@ -478,9 +484,7 @@ var IV = {
 		var result = document.createElement('div');
 		result.className = 'page-scroll';
 		result.tabIndex = '-1';
-		result.innerHTML = '<div class="page-slide"><article>'
-			+ html
-			+ '</article></div>';
+		result.innerHTML = html.trim();
 		result.onscroll = IV.frameScrolled;
 		return result;
 	},
@@ -616,9 +620,6 @@ var IV = {
 	stopAnimations: function (element) {
 		element.getAnimations().forEach(
 			(animation) => animation.finish());
-	},
-	back: function () {
-        window.history.back();
 	},
 	menuShown: function (shown) {
 		var already = document.getElementById('menu_page_blocker');

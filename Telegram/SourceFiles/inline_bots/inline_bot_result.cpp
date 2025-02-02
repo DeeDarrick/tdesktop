@@ -284,7 +284,7 @@ std::unique_ptr<Result> Result::Create(
 	});
 
 	if (const auto point = result->getLocationPoint()) {
-		const auto scale = 1 + (cScale() * cIntRetinaFactor()) / 200;
+		const auto scale = 1 + (cScale() * style::DevicePixelRatio()) / 200;
 		const auto zoom = 15 + (scale - 1);
 		const auto w = st::inlineThumbSize / scale;
 		const auto h = st::inlineThumbSize / scale;
@@ -378,23 +378,25 @@ bool Result::hasThumbDisplay() const {
 void Result::addToHistory(
 		not_null<History*> history,
 		HistoryItemCommonFields &&fields) const {
-	fields.flags |= MessageFlag::FromInlineBot;
+	history->addNewLocalMessage(makeMessage(history, std::move(fields)));
+}
+
+not_null<HistoryItem*> Result::makeMessage(
+		not_null<History*> history,
+		HistoryItemCommonFields &&fields) const {
+	fields.flags |= MessageFlag::FromInlineBot | MessageFlag::Local;
 	if (_replyMarkup) {
 		fields.markup = *_replyMarkup;
 		if (!fields.markup.isNull()) {
 			fields.flags |= MessageFlag::HasReplyMarkup;
 		}
 	}
-	sendData->addToHistory(this, history, std::move(fields));
+	return sendData->makeMessage(this, history, std::move(fields));
 }
 
-QString Result::getErrorOnSend(not_null<History*> history) const {
-	const auto specific = sendData->getErrorOnSend(this, history);
-	return !specific.isEmpty()
-		? specific
-		: Data::RestrictionError(
-			history->peer,
-			ChatRestriction::SendInline).value_or(QString());
+Data::SendError Result::getErrorOnSend(not_null<History*> history) const {
+	return sendData->getErrorOnSend(this, history).value_or(
+		Data::RestrictionError(history->peer, ChatRestriction::SendInline));
 }
 
 std::optional<Data::LocationPoint> Result::getLocationPoint() const {

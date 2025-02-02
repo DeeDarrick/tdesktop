@@ -15,6 +15,7 @@ PRIVATE
     iv/iv_controller.h
     iv/iv_data.cpp
     iv/iv_data.h
+    iv/iv_delegate.h
     iv/iv_pch.h
     iv/iv_prepare.cpp
     iv/iv_prepare.h
@@ -37,6 +38,7 @@ PUBLIC
     tdesktop::td_scheme
 PRIVATE
     desktop-app::lib_webview
+    desktop-app::external_ada
     tdesktop::td_lang
     tdesktop::td_ui
 )

@@ -16,6 +16,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "lang/lang_hardcoded.h"
 #include "boxes/peers/edit_participants_box.h" // SubscribeToMigration.
 #include "ui/toast/toast.h"
+#include "ui/ui_utility.h"
 #include "base/unixtime.h"
 #include "core/application.h"
 #include "core/core_settings.h"
@@ -668,8 +669,9 @@ GroupCall::GroupCall(
 GroupCall::~GroupCall() {
 	destroyScreencast();
 	destroyController();
-
-	Core::App().mediaDevices().setCaptureMuteTracker(this, false);
+	if (!_rtmp) {
+		Core::App().mediaDevices().setCaptureMuteTracker(this, false);
+	}
 }
 
 bool GroupCall::isSharingScreen() const {
@@ -1375,6 +1377,7 @@ void GroupCall::rejoin(not_null<PeerData*> as) {
 				inputCall(),
 				joinAs()->input,
 				MTP_string(_joinHash),
+				MTPlong(), // key_fingerprint
 				MTP_dataJSON(MTP_bytes(json))
 			)).done([=](
 					const MTPUpdates &updates,
@@ -2091,14 +2094,16 @@ void GroupCall::setupMediaDevices() {
 		_cameraCapture->switchToDevice(deviceId.value.toStdString(), false);
 	}, _lifetime);
 
-	_muted.value() | rpl::start_with_next([=](MuteState state) {
-		const auto devices = &Core::App().mediaDevices();
-		const auto muted = (state != MuteState::Active)
-			&& (state != MuteState::PushToTalk);
-		const auto track = !muted || (state == MuteState::Muted);
-		devices->setCaptureMuteTracker(this, track);
-		devices->setCaptureMuted(muted);
-	}, _lifetime);
+	if (!_rtmp) {
+		_muted.value() | rpl::start_with_next([=](MuteState state) {
+			const auto devices = &Core::App().mediaDevices();
+			const auto muted = (state != MuteState::Active)
+				&& (state != MuteState::PushToTalk);
+			const auto track = !muted || (state == MuteState::Muted);
+			devices->setCaptureMuteTracker(this, track);
+			devices->setCaptureMuted(muted);
+		}, _lifetime);
+	}
 }
 
 void GroupCall::captureMuteChanged(bool mute) {

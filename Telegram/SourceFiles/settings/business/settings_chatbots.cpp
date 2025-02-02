@@ -38,6 +38,7 @@ constexpr auto kDebounceTimeout = crl::time(400);
 enum class LookupState {
 	Empty,
 	Loading,
+	Unsupported,
 	Ready,
 };
 
@@ -46,7 +47,7 @@ struct BotState {
 	LookupState state = LookupState::Empty;
 };
 
-class Chatbots : public BusinessSection<Chatbots> {
+class Chatbots final : public BusinessSection<Chatbots> {
 public:
 	Chatbots(
 		QWidget *parent,
@@ -133,11 +134,7 @@ void PreviewRow::rightActionPaint(
 		bool selected,
 		bool actionSelected) {
 	if (_actionRipple) {
-		_actionRipple->paint(
-			p,
-			x,
-			y,
-			outerWidth);
+		_actionRipple->paint(p, x, y, outerWidth);
 		if (_actionRipple->empty()) {
 			_actionRipple.reset();
 		}
@@ -149,8 +146,8 @@ void PreviewRow::rightActionPaint(
 }
 
 void PreviewRow::rightActionAddRipple(
-	QPoint point,
-	Fn<void()> updateCallback) {
+		QPoint point,
+		Fn<void()> updateCallback) {
 	if (!_actionRipple) {
 		auto mask = Ui::RippleAnimation::EllipseMask(rightActionSize());
 		_actionRipple = std::make_unique<Ui::RippleAnimation>(
@@ -225,6 +222,9 @@ Main::Session &PreviewController::session() const {
 
 [[nodiscard]] QString ExtractUsername(QString text) {
 	text = text.trimmed();
+	if (text.startsWith(QChar('@'))) {
+		return text.mid(1);
+	}
 	static const auto expression = QRegularExpression(
 		"^(https://)?([a-zA-Z0-9\\.]+/)?([a-zA-Z0-9_\\.]+)");
 	const auto match = expression.match(text);
@@ -247,9 +247,14 @@ Main::Session &PreviewController::session() const {
 			return rpl::single(BotState());
 		} else if (const auto peer = owner->peerByUsername(extracted)) {
 			if (const auto user = peer->asUser(); user && user->isBot()) {
+				if (user->botInfo->supportsBusiness) {
+					return rpl::single(BotState{
+						.bot = user,
+						.state = LookupState::Ready,
+					});
+				}
 				return rpl::single(BotState{
-					.bot = user,
-					.state = LookupState::Ready,
+					.state = LookupState::Unsupported,
 				});
 			}
 			return rpl::single(BotState{
@@ -267,7 +272,9 @@ Main::Session &PreviewController::session() const {
 
 			const auto requestId = result.make_state<mtpRequestId>();
 			*requestId = session->api().request(MTPcontacts_ResolveUsername(
-				MTP_string(extracted)
+				MTP_flags(0),
+				MTP_string(extracted),
+				MTP_string()
 			)).done([=](const MTPcontacts_ResolvedPeer &result) {
 				const auto &data = result.data();
 				session->data().processUsers(data.vusers());
@@ -314,7 +321,10 @@ Main::Session &PreviewController::session() const {
 	std::move(state) | rpl::filter([=](BotState state) {
 		return state.state != LookupState::Loading;
 	}) | rpl::start_with_next([=](BotState state) {
-		raw->toggle(state.state == LookupState::Ready, anim::type::normal);
+		raw->toggle(
+			(state.state == LookupState::Ready
+				|| state.state == LookupState::Unsupported),
+			anim::type::normal);
 		if (state.bot) {
 			const auto delegate = parent->lifetime().make_state<
 				PeerListContentDelegateSimple
@@ -330,11 +340,14 @@ Main::Session &PreviewController::session() const {
 			controller->setDelegate(delegate);
 			delete base::take(*child);
 			*child = content;
-		} else if (state.state == LookupState::Ready) {
+		} else if (state.state == LookupState::Ready
+			|| state.state == LookupState::Unsupported) {
 			const auto content = Ui::CreateChild<Ui::RpWidget>(inner);
 			const auto label = Ui::CreateChild<Ui::FlatLabel>(
 				content,
-				tr::lng_chatbots_not_found(),
+				(state.state == LookupState::Unsupported
+					? tr::lng_chatbots_not_supported()
+					: tr::lng_chatbots_not_found()),
 				st::settingsChatbotsNotFound);
 			content->resize(
 				inner->width(),
@@ -396,7 +409,7 @@ void Chatbots::setupContent(
 	const auto content = Ui::CreateChild<Ui::VerticalLayout>(this);
 	const auto current = controller->session().data().chatbots().current();
 
-	_recipients = current.recipients;
+	_recipients = Data::BusinessRecipients::MakeValid(current.recipients);
 	_repliesAllowed = current.repliesAllowed;
 
 	AddDividerTextWithLottie(content, {
@@ -448,6 +461,7 @@ void Chatbots::setupContent(
 		.controller = controller,
 		.title = tr::lng_chatbots_access_title(),
 		.data = &_recipients,
+		.type = Data::BusinessRecipientsType::Bots,
 	});
 
 	Ui::AddSkip(content, st::settingsChatbotsAccessSkip);
@@ -482,6 +496,8 @@ void Chatbots::save() {
 	const auto fail = [=](QString error) {
 		if (error == u"BUSINESS_RECIPIENTS_EMPTY"_q) {
 			show->showToast(tr::lng_greeting_recipients_empty(tr::now));
+		} else if (error == u"BOT_BUSINESS_MISSING"_q) {
+			show->showToast(tr::lng_chatbots_not_supported(tr::now));
 		}
 	};
 	controller()->session().data().chatbots().save({

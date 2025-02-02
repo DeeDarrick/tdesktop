@@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #pragma once
 
+#include "base/required.h"
 #include "data/business/data_business_common.h"
 #include "settings/settings_common_session.h"
 
@@ -52,6 +53,7 @@ private:
 struct BusinessChatsDescriptor {
 	Data::BusinessChats current;
 	Fn<void(const Data::BusinessChats&)> save;
+	bool usersOnly = false;
 	bool include = false;
 };
 void EditBusinessChats(
@@ -66,35 +68,36 @@ struct BusinessRecipientsSelectorDescriptor {
 	not_null<Window::SessionController*> controller;
 	rpl::producer<QString> title;
 	not_null<rpl::variable<Data::BusinessRecipients>*> data;
+	base::required<Data::BusinessRecipientsType> type;
 };
 void AddBusinessRecipientsSelector(
 	not_null<Ui::VerticalLayout*> container,
 	BusinessRecipientsSelectorDescriptor &&descriptor);
 
-[[nodiscard]] int ShortcutsCount(not_null<Main::Session*> session);
+[[nodiscard]] int ShortcutsCount(not_null<::Main::Session*> session);
 [[nodiscard]] rpl::producer<int> ShortcutsCountValue(
-	not_null<Main::Session*> session);
+	not_null<::Main::Session*> session);
 [[nodiscard]] int ShortcutMessagesCount(
-	not_null<Main::Session*> session,
+	not_null<::Main::Session*> session,
 	const QString &name);
 [[nodiscard]] rpl::producer<int> ShortcutMessagesCountValue(
-	not_null<Main::Session*> session,
+	not_null<::Main::Session*> session,
 	const QString &name);
 [[nodiscard]] bool ShortcutExists(
-	not_null<Main::Session*> session,
+	not_null<::Main::Session*> session,
 	const QString &name);
 [[nodiscard]] rpl::producer<bool> ShortcutExistsValue(
-	not_null<Main::Session*> session,
+	not_null<::Main::Session*> session,
 	const QString &name);
-[[nodiscard]] int ShortcutsLimit(not_null<Main::Session*> session);
+[[nodiscard]] int ShortcutsLimit(not_null<::Main::Session*> session);
 [[nodiscard]] rpl::producer<int> ShortcutsLimitValue(
-	not_null<Main::Session*> session);
-[[nodiscard]] int ShortcutMessagesLimit(not_null<Main::Session*> session);
+	not_null<::Main::Session*> session);
+[[nodiscard]] int ShortcutMessagesLimit(not_null<::Main::Session*> session);
 [[nodiscard]] rpl::producer<int> ShortcutMessagesLimitValue(
-	not_null<Main::Session*> session);
+	not_null<::Main::Session*> session);
 
 [[nodiscard]] BusinessShortcutId LookupShortcutId(
-	not_null<Main::Session*> session,
+	not_null<::Main::Session*> session,
 	const QString &name);
 
 } // namespace Settings
